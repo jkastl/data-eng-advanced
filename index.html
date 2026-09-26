@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#121212">
+  <title>Advanced Data Engineering</title>
+  <meta name="description" content="Advanced data engineering, one interactive demo at a time: stream processing, exactly-once delivery, CDC, table formats, distributed execution, lineage and semantic layers.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23121212'/%3E%3Cpath d='M4 9h9l6 7-6 7H4M19 16h9M22 9h6M22 23h6' fill='none' stroke='%237aa7ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/">
+        <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 9h9l6 7-6 7H4M19 16h9M22 9h6M22 23h6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>DE Advanced</span>
+      </a>
+      <nav class="topnav" aria-label="Topics">
+        <a href="#/streaming" data-view="streaming"><span class="n">1</span>Streams</a>
+        <a href="#/delivery" data-view="delivery"><span class="n">2</span>Exactly-once</a>
+        <a href="#/cdc" data-view="cdc"><span class="n">3</span>CDC</a>
+        <a href="#/tables" data-view="tables"><span class="n">4</span>Table formats</a>
+        <a href="#/distributed" data-view="distributed"><span class="n">5</span>Distributed</a>
+        <a href="#/lineage" data-view="lineage"><span class="n">6</span>Lineage</a>
+        <a href="#/semantic" data-view="semantic"><span class="n">7</span>Semantic layer</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================================================================ HOME -->
+    <section class="view" data-view="home" data-short="Home">
+      <div class="hero">
+        <p class="kicker">Data engineering, the hard parts</p>
+        <h1>Where simple pipelines stop being simple.</h1>
+        <p>Seven topics that show up once data is big, fast or shared by a lot of people. Each one has a small
+          working model you can push until it breaks. It follows on from
+          <a href="https://jkastl.github.io/data-eng-concepts/">Data Engineering Concepts</a>, which covers the
+          fundamentals.</p>
+      </div>
+      <ul class="cards">
+        <li class="card">
+          <p class="kicker">1 · Streams</p>
+          <h2><a href="#/streaming">Event time, windows and watermarks</a></h2>
+          <p>Count clicks per 10 seconds when some phones report in late. Decide how long to wait.</p>
+          <p class="tech">Event vs processing time · tumbling windows · late data</p>
+        </li>
+        <li class="card">
+          <p class="kicker">2 · Delivery</p>
+          <h2><a href="#/delivery">At-least-once, exactly-once</a></h2>
+          <p>Crash a consumer between writing and committing, and see which setups lose or double payments.</p>
+          <p class="tech">Offsets · idempotent sinks · transactions</p>
+        </li>
+        <li class="card">
+          <p class="kicker">3 · Change capture</p>
+          <h2><a href="#/cdc">Log-based CDC</a></h2>
+          <p>Poll a table or read the database's log. Only one of them sees every change and every delete.</p>
+          <p class="tech">Write-ahead log · LSNs · polling gaps</p>
+        </li>
+        <li class="card">
+          <p class="kicker">4 · Lakehouse</p>
+          <h2><a href="#/tables">Open table formats</a></h2>
+          <p>Commit snapshots over immutable files, delete rows two ways, compact, time travel and resolve a
+            write conflict.</p>
+          <p class="tech">Iceberg · Delta · copy-on-write · merge-on-read</p>
+        </li>
+        <li class="card">
+          <p class="kicker">5 · Scale</p>
+          <h2><a href="#/distributed">Shuffles, skew and joins</a></h2>
+          <p>Watch one hot key stall a cluster, fix it with salting, and pick between broadcast and shuffle joins.</p>
+          <p class="tech">Hash partitioning · stragglers · broadcast joins</p>
+        </li>
+        <li class="card">
+          <p class="kicker">6 · Governance</p>
+          <h2><a href="#/lineage">Lineage and PII</a></h2>
+          <p>Trace a column upstream and downstream, then see why masking depends on tags following the lineage.</p>
+          <p class="tech">Column lineage · impact analysis · masking</p>
+        </li>
+        <li class="card">
+          <p class="kicker">7 · Consumption</p>
+          <h2><a href="#/semantic">Semantic layers and cost</a></h2>
+          <p>Three dashboards, three revenue numbers. Then decide when precomputing pays for itself.</p>
+          <p class="tech">Metrics layer · materialized views · scan cost</p>
+        </li>
+      </ul>
+      <p class="disclaimer">Every dataset here is generated in your browser from a fixed seed. Nothing is fetched
+        or sent anywhere. The mechanics are real; the scale is not.</p>
+    </section>
+
+    <!-- ================================================================ 1: STREAMING -->
+    <section class="view chapter" data-view="streaming" data-short="Event time and watermarks" data-next="delivery" hidden>
+      <header class="chapter-head">
+        <p class="kicker">1 · Streams</p>
+        <h1>Event time, windows and watermarks</h1>
+        <p class="lede">A streaming job counts clicks per 10-second window. Easy, until you notice that events
+          don't arrive in the order they happened.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>When is a window finished?</h2>
+          <p>Each dot is a click. Across is <strong>event time</strong>, when it happened on the phone. Down is
+            <strong>processing time</strong>, when it reached the pipeline. Most arrive within seconds; phones
+            that lost signal report much later.</p>
+          <p>Group by processing time and the counts are simply wrong: a late click lands in whatever window is
+            open when it shows up.</p>
+          <p>Group by event time and a new question appears: how long do you wait before emitting a window? The
+            <strong>watermark</strong> (orange) is the job's guess at "everything before this time has
+            arrived", usually the newest event seen minus a fixed delay. A window is emitted once the
+            watermark passes its end.</p>
+          <p>Events behind the watermark are <strong>late</strong>. With <strong>allowed lateness</strong> the
+            job re-emits an updated count; past it, the event is dropped. A longer delay is more correct and
+            less fresh. There is no free setting.</p>
+          <div class="try"><b>Try it</b>Press Play with processing time, then switch to event time. Raise the
+            watermark delay until the counts are right, and see how long results take to appear. Then try
+            allowed lateness instead.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="controls">
+              <span class="lbl">Window by</span>
+              <div class="seg" id="s1-basis" role="group" aria-label="Window by">
+                <button data-v="processing" aria-pressed="false">Processing time</button>
+                <button data-v="event" aria-pressed="true">Event time</button>
+              </div>
+              <button class="btn primary" id="s1-play">Play</button>
+            </div>
+            <div class="ctls" style="margin-top:.8rem">
+              <label class="ctl"><span>Processing time (now)</span><output id="s1-now-out"></output><input id="s1-now" type="range" min="0" max="95" step="1" value="40"></label>
+            </div>
+            <div class="ctls" id="s1-delay-wrap" style="margin-top:.8rem">
+              <label class="ctl"><span>Watermark delay</span><output for="s1-delay"></output><input id="s1-delay" type="range" min="0" max="20" step="1" value="3"></label>
+              <label class="ctl"><span>Allowed lateness</span><output for="s1-lateness"></output><input id="s1-lateness" type="range" min="0" max="30" step="1" value="0"></label>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="legend">
+              <span><i class="sw" style="background:var(--s1)"></i>On time</span>
+              <span><i class="sw" style="background:var(--warn-ink)"></i>Late, count updated</span>
+              <span><i class="sw" style="background:var(--critical)"></i>Too late, dropped</span>
+              <span><i class="sw" style="background:var(--s4);height:3px"></i>Watermark</span>
+              <span><i class="sw" style="background:rgba(12,163,12,.35)"></i>Window emitted</span>
+            </div>
+            <div class="splot" id="s1-plot"></div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Watermark</span><span class="stat-value" id="s1-wm">–</span></div>
+            <div class="stat"><span class="stat-label">Late updates</span><span class="stat-value" id="s1-late">–</span></div>
+            <div class="stat"><span class="stat-label">Dropped</span><span class="stat-value" id="s1-dropped">–</span></div>
+            <div class="stat"><span class="stat-label">Avg wait after window ends</span><span class="stat-value" id="s1-wait">–</span></div>
+            <div class="stat"><span class="stat-label">Windows wrong</span><span class="stat-value" id="s1-wrong">–</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Emitted results</p>
+            <p class="panel-sub">True count = every click that happened in the window, however late it arrives</p>
+            <div id="s1-results"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 2: DELIVERY -->
+    <section class="view chapter" data-view="delivery" data-short="Delivery guarantees" data-next="cdc" hidden>
+      <header class="chapter-head">
+        <p class="kicker">2 · Delivery</p>
+        <h1>At-least-once, exactly-once</h1>
+        <p class="lede">A consumer reads payments from a log (think Kafka), writes each one to a database and
+          records how far it got. Crash it in the wrong place and money appears or vanishes.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>Two writes that aren't one</h2>
+          <p>For every message the consumer does two things: write the row, and <strong>commit the
+            offset</strong> so a restart knows where to resume. A crash between them leaves one done and the
+            other not.</p>
+          <ul>
+            <li><strong>At most once:</strong> commit first. A crash skips the message. Nothing is ever
+              duplicated, and payments are lost.</li>
+            <li><strong>At least once:</strong> write first. A crash replays the message. Nothing is lost, and
+              payments are doubled.</li>
+            <li><strong>Idempotent sink:</strong> still at least once, but the write is an upsert on the payment
+              id, so a replay changes nothing. This is how most "exactly-once" pipelines really work.</li>
+            <li><strong>Transactional:</strong> the row and the offset are committed in one transaction, so they
+              can't disagree. Kafka transactions and Flink's two-phase commit sinks do this across systems.</li>
+          </ul>
+          <p>Exactly-once is about the <em>effect</em>, not delivery: messages may still be read twice, but the
+            result is as if each counted once.</p>
+          <div class="try"><b>Try it</b>Crash at offset 4 under each strategy and compare the sink. Then move the
+            crash to other offsets.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="seg" id="s2-strat" role="group" aria-label="Strategy">
+              <button data-v="atmost" aria-pressed="false">At most once</button>
+              <button data-v="atleast" aria-pressed="true">At least once</button>
+              <button data-v="idem" aria-pressed="false">Idempotent sink</button>
+              <button data-v="txn" aria-pressed="false">Transactional</button>
+            </div>
+            <div class="ctls" style="margin-top:.8rem;max-width:24rem">
+              <label class="ctl"><span>Crash while handling</span><output for="s2-crash"></output><input id="s2-crash" type="range" min="-1" max="7" step="1" value="4"></label>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Rows in sink</span><span class="stat-value" id="s2-rows">–</span></div>
+            <div class="stat"><span class="stat-label">Duplicates</span><span class="stat-value" id="s2-dupes">–</span></div>
+            <div class="stat"><span class="stat-label">Lost</span><span class="stat-value" id="s2-lost">–</span></div>
+            <div class="stat"><span class="stat-label">Total paid</span><span class="stat-value" id="s2-total">–</span><span class="stat-note" id="s2-true"></span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Topic <code>payments</code>, partition 0</p>
+            <div class="log" id="s2-log"></div>
+          </div>
+          <div class="row">
+            <div class="panel">
+              <p class="panel-title">Consumer loop</p>
+              <pre class="code" id="s2-code" style="margin-bottom:.8rem"></pre>
+              <p class="panel-title">What happened</p>
+              <ol class="trace" id="s2-trace"></ol>
+            </div>
+            <div class="panel">
+              <p class="panel-title">Sink table</p>
+              <div id="s2-sink"></div>
+              <p class="msg bad" id="s2-missing" style="margin-top:.6rem" hidden></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 3: CDC -->
+    <section class="view chapter" data-view="cdc" data-short="Log-based CDC" data-next="tables" hidden>
+      <header class="chapter-head">
+        <p class="kicker">3 · Change capture</p>
+        <h1>Log-based CDC</h1>
+        <p class="lede">Every database already records each change in a write-ahead log so it can recover from
+          crashes. Change data capture reads that log instead of asking the table what's new.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>Snapshots vs a history</h2>
+          <p><strong>Polling</strong> runs a query every few seconds for rows with a newer
+            <code>updated_at</code>. It gets each row's state <em>at poll time</em>, so:</p>
+          <ul>
+            <li>two updates between polls look like one; the middle state is lost,</li>
+            <li>a delete leaves nothing behind to find,</li>
+            <li>a row inserted and deleted between polls never existed as far as you know,</li>
+            <li>and every poll is a query against the production database.</li>
+          </ul>
+          <p><strong>Log-based CDC</strong> (Debezium, AWS DMS, Fivetran, Postgres logical replication) reads
+            the write-ahead log in order. Every insert, update and delete arrives, with before and after values and a
+            log sequence number (<strong>LSN</strong>) to resume from after a restart. The cost: access to
+            replication slots, log retention to manage, and schema changes to follow.</p>
+          <div class="try"><b>Try it</b>Drag the clock and compare the two views of order 1. Make polling faster.
+            Does it ever see order 5?</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="ctls">
+              <label class="ctl"><span>Clock</span><output id="s3-now-out"></output><input id="s3-now" type="range" min="0" max="12" step="1" value="12"></label>
+              <div>
+                <p class="lbl" style="margin:0 0 .3rem">Poll every</p>
+                <div class="seg" id="s3-interval" role="group" aria-label="Polling interval">
+                  <button data-v="2" aria-pressed="false">2 s</button>
+                  <button data-v="3" aria-pressed="false">3 s</button>
+                  <button data-v="4" aria-pressed="true">4 s</button>
+                  <button data-v="6" aria-pressed="false">6 s</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Changes in the log</span><span class="stat-value" id="s3-changes">–</span></div>
+            <div class="stat"><span class="stat-label">Seen by polling</span><span class="stat-value" id="s3-captured">–</span></div>
+            <div class="stat"><span class="stat-label">Deletes seen by polling</span><span class="stat-value" id="s3-deletes">–</span></div>
+            <div class="stat"><span class="stat-label">Queries on the source</span><span class="stat-value" id="s3-queries">–</span><span class="stat-note">log reader: 0</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">History of each order</p>
+            <div id="s3-hist"></div>
+          </div>
+          <div class="row">
+            <div class="panel">
+              <p class="panel-title">Write-ahead log, newest first</p>
+              <div id="s3-wal"></div>
+            </div>
+            <div class="panel">
+              <p class="panel-title">Polling queries</p>
+              <ul class="trace" id="s3-polls" style="list-style:none;padding:0"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 4: TABLE FORMATS -->
+    <section class="view chapter" data-view="tables" data-short="Open table formats" data-next="distributed" hidden>
+      <header class="chapter-head">
+        <p class="kicker">4 · Lakehouse</p>
+        <h1>Open table formats</h1>
+        <p class="lede">Object storage (S3, GCS) only lets you write whole files, never edit them. Iceberg, Delta
+          Lake and Hudi build real tables, with transactions, deletes and history, on top of that.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>A table is a list of files</h2>
+          <p>Data files are <strong>immutable</strong>. A table is a <strong>snapshot</strong>: metadata listing
+            which files make up the table right now. A write adds new files, then atomically swaps the pointer to
+            a new snapshot. Readers see the old snapshot or the new one, never half of a write.</p>
+          <p>Deleting a row means either:</p>
+          <ul>
+            <li><strong>Copy-on-write:</strong> rewrite every file that holds an affected row. Slow writes, fast
+              reads.</li>
+            <li><strong>Merge-on-read:</strong> write a small delete file, and let readers filter those rows out.
+              Fast writes, slower reads, until <strong>compaction</strong> folds them in.</li>
+          </ul>
+          <p>Old snapshots still point at old files, which gives you <strong>time travel</strong> for free until
+            you <strong>expire</strong> them. Two writers at once use <strong>optimistic concurrency</strong>: the
+            loser's commit fails, it checks for conflicts, and retries.</p>
+          <div class="try"><b>Try it</b>Delete Ana's rows with copy-on-write, reset, then with merge-on-read, and
+            compare the files. Compact. Read an old snapshot. Expire, and try again.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="controls">
+              <span class="lbl">Deletes use</span>
+              <div class="seg" id="s4-mode" role="group" aria-label="Delete mode">
+                <button data-v="cow" aria-pressed="true">Copy-on-write</button>
+                <button data-v="mor" aria-pressed="false">Merge-on-read</button>
+              </div>
+            </div>
+            <div class="controls" id="s4-ops">
+              <button class="btn" id="s4-append">Append</button>
+              <span class="controls" style="gap:.4rem"><button class="btn" id="s4-delete">Delete rows for</button><select id="s4-del" aria-label="Customer"></select></span>
+              <button class="btn" id="s4-compact">Compact</button>
+              <button class="btn" id="s4-concurrent">Two writers at once</button>
+              <button class="btn danger" id="s4-expire">Expire snapshots</button>
+              <button class="btn ghost" id="s4-reset">Reset</button>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Reading snapshot</span><span class="stat-value" id="s4-snap">–</span></div>
+            <div class="stat"><span class="stat-label">Rows visible</span><span class="stat-value" id="s4-rows">–</span></div>
+            <div class="stat"><span class="stat-label">Files read (data + delete)</span><span class="stat-value" id="s4-read">–</span></div>
+            <div class="stat"><span class="stat-label">Files on storage</span><span class="stat-value" id="s4-stored">–</span></div>
+            <div class="stat"><span class="stat-label">Rows rewritten</span><span class="stat-value" id="s4-rewritten">–</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Files in the bucket</p>
+            <p class="panel-sub">Solid: part of the snapshot being read. Dashed: kept only for older snapshots.</p>
+            <div class="fchips" id="s4-files"></div>
+            <pre class="code" id="s4-query" style="margin-top:.8rem"></pre>
+          </div>
+          <div class="row">
+            <div class="panel">
+              <p class="panel-title">Snapshots</p>
+              <p class="panel-sub">Click a snapshot number to time travel</p>
+              <div id="s4-snaps"></div>
+            </div>
+            <div class="panel">
+              <p class="panel-title">Commit log</p>
+              <ul class="trace" id="s4-log"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 5: DISTRIBUTED -->
+    <section class="view chapter" data-view="distributed" data-short="Shuffles and skew" data-next="lineage" hidden>
+      <header class="chapter-head">
+        <p class="kicker">5 · Scale</p>
+        <h1>Shuffles, skew and joins</h1>
+        <p class="lede">Spark, Trino and every cloud warehouse split work across many machines. They're only as
+          fast as the slowest one, and moving data between them is the most expensive thing they do.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>One hot key</h2>
+          <p>To <code>GROUP BY customer_id</code>, rows are <strong>shuffled</strong>: sent over the network to
+            the worker picked by <code>hash(customer_id)</code>, so all rows for one customer end up together.</p>
+          <p>That's fair when keys are similar in size. Real data is <strong>skewed</strong>: one customer, one
+            country or one NULL can own a big share of rows. Its worker becomes a
+            <strong>straggler</strong>, and the stage waits for it while the others sit idle.</p>
+          <p><strong>Salting</strong> adds a random suffix to the key, spreads the hot key over all workers, then
+            combines the partial results in a second, much smaller step. Modern engines (Spark's adaptive query
+            execution) can split skewed partitions automatically.</p>
+          <div class="try"><b>Try it</b>Push the hot key's share up and watch the stage time. Adding workers
+            doesn't help. Salting does.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="ctls">
+              <label class="ctl"><span>Workers</span><output for="s5-workers"></output><input id="s5-workers" type="range" min="2" max="16" step="1" value="8"></label>
+              <label class="ctl"><span>Rows owned by the hot key</span><output for="s5-skew"></output><input id="s5-skew" type="range" min="0" max="80" step="1" value="30"></label>
+            </div>
+            <div class="controls" style="margin-top:.6rem">
+              <label class="check"><input type="checkbox" id="s5-salt"> Salt the hot key</label>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Busiest worker</span><span class="stat-value" id="s5-max">–</span><span class="stat-note">rows</span></div>
+            <div class="stat"><span class="stat-label">Fair share</span><span class="stat-value" id="s5-mean">–</span><span class="stat-note">rows</span></div>
+            <div class="stat"><span class="stat-label">Stage time</span><span class="stat-value" id="s5-time">–</span><span class="stat-note">vs a perfectly even split</span></div>
+            <div class="stat"><span class="stat-label">Cluster utilization</span><span class="stat-value" id="s5-eff">–</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Rows per worker after the shuffle</p>
+            <div class="bars" id="s5-bars" style="margin-bottom:.8rem"></div>
+            <pre class="code" id="s5-sql"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>Broadcast or shuffle?</h2>
+          <p>Joining a 500 GB fact table to a dimension, the engine has two options:</p>
+          <ul>
+            <li><strong>Shuffle join:</strong> repartition <em>both</em> tables by the join key so matching rows
+              meet. Works for any size, but moves everything over the network.</li>
+            <li><strong>Broadcast join:</strong> copy the small table whole to every node. The big table doesn't
+              move at all. Only works if the small table fits in each node's memory.</li>
+          </ul>
+          <p>Optimizers pick automatically from table statistics, which is why stale statistics can turn a
+            two-minute query into an out-of-memory error.</p>
+          <div class="try"><b>Try it</b>Grow the dimension table and find where broadcast stops paying off, and
+            where it stops working at all.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="ctls">
+              <label class="ctl"><span>Dimension table size</span><output id="s5-dim-out"></output><input id="s5-dim" type="range" min="-2" max="3" step="0.1" value="0"></label>
+              <label class="ctl"><span>Nodes</span><output for="s5-nodes"></output><input id="s5-nodes" type="range" min="4" max="100" step="1" value="20"></label>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Shuffle join moves</span><span class="stat-value" id="s5-shuf">–</span></div>
+            <div class="stat"><span class="stat-label">Broadcast join moves</span><span class="stat-value" id="s5-bc">–</span><span class="stat-note">8 GB memory per node</span></div>
+            <div class="stat"><span class="stat-label">Optimizer picks</span><span class="stat-value" id="s5-pick">–</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Data sent over the network</p>
+            <div class="bars" id="s5-join-bars" style="margin-bottom:.8rem"></div>
+            <p class="msg" id="s5-join-msg" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 6: LINEAGE -->
+    <section class="view chapter" data-view="lineage" data-short="Lineage and PII" data-next="semantic" hidden>
+      <header class="chapter-head">
+        <p class="kicker">6 · Governance</p>
+        <h1>Lineage and PII</h1>
+        <p class="lede">Once hundreds of tables feed each other, two questions come up every week: "what breaks
+          if I change this?" and "where did this customer's email end up?"</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>Follow the column</h2>
+          <p><strong>Column-level lineage</strong> records which source columns each column is computed from.
+            Tools like dbt, OpenLineage and data catalogs build it by parsing the SQL of every model.</p>
+          <p>Downstream is <strong>impact analysis</strong>: before renaming <code>crm.customers.email</code>,
+            see every table, feature and dashboard that depends on it. Upstream is <strong>root cause</strong>:
+            when a number looks wrong, which sources feed it?</p>
+          <p>Governance rides on the same graph. Tag <strong>PII</strong> at the source and let the tag
+            <strong>propagate</strong> down the lineage, and masking policies apply to every copy automatically,
+            including derived columns nobody remembered were personal.</p>
+          <div class="try"><b>Try it</b>Click columns to trace them (blue downstream, pink upstream). Then switch
+            roles, and turn off tag propagation.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <p class="panel-title">Selected: <code id="s6-sel"></code></p>
+            <div class="lgraph tbl-wrap" id="s6-graph"></div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Upstream columns</span><span class="stat-value" id="s6-up">–</span></div>
+            <div class="stat"><span class="stat-label">Downstream columns</span><span class="stat-value" id="s6-down">–</span></div>
+            <div class="stat"><span class="stat-label">Tables affected by a change</span><span class="stat-value" id="s6-tables">–</span></div>
+          </div>
+          <div class="row">
+            <div class="panel">
+              <p class="panel-title">Impact of changing it</p>
+              <ul class="trace" id="s6-impact"></ul>
+            </div>
+            <div class="panel">
+              <p class="panel-title">Masking policy</p>
+              <div class="controls">
+                <div class="seg" id="s6-role" role="group" aria-label="Viewer role">
+                  <button data-v="analyst" aria-pressed="true">Analyst</button>
+                  <button data-v="support" aria-pressed="false">Support</button>
+                  <button data-v="engineer" aria-pressed="false">Engineer</button>
+                </div>
+              </div>
+              <div class="controls">
+                <label class="check"><input type="checkbox" id="s6-prop" checked> Propagate PII tags through lineage</label>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <p class="panel-title"><code>SELECT * FROM dim_customer</code> as this role</p>
+            <div id="s6-preview" style="margin-bottom:.6rem"></div>
+            <p class="msg" id="s6-msg" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ 7: SEMANTIC -->
+    <section class="view chapter" data-view="semantic" data-short="Semantic layers and cost" hidden>
+      <header class="chapter-head">
+        <p class="kicker">7 · Consumption</p>
+        <h1>Semantic layers and cost</h1>
+        <p class="lede">The last mile: many tools and many people querying the same tables. Two things go wrong at
+          scale: everyone computes the same metric differently, and everyone pays to scan the same data again.</p>
+      </header>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>What is "revenue"?</h2>
+          <p>Finance subtracts tax and refunds. Sales counts what was booked. A notebook forgot to filter test
+            orders. All three are "revenue", and none of them agree.</p>
+          <p>A <strong>semantic layer</strong> (dbt's MetricFlow, Cube, LookML) defines each metric once, in code,
+            next to the models. Every dashboard, notebook and spreadsheet asks it for <code>revenue</code> by name
+            and gets the same SQL underneath.</p>
+          <div class="try"><b>Try it</b>Turn on the semantic layer, then change the shared definition and watch
+            every tool follow.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <label class="check"><input type="checkbox" id="s7-layer"> Use a semantic layer</label>
+            <div id="s7-def" hidden style="margin-top:.8rem">
+              <div class="controls" style="margin-bottom:.6rem">
+                <label class="check"><input type="checkbox" id="s7-d-tax" checked> Exclude tax</label>
+                <label class="check"><input type="checkbox" id="s7-d-refunds" checked> Exclude refunds</label>
+                <label class="check"><input type="checkbox" id="s7-d-test" checked> Exclude test orders</label>
+              </div>
+              <pre class="code" id="s7-yaml"></pre>
+            </div>
+          </div>
+          <div class="tools" id="s7-tools"></div>
+          <p class="msg" id="s7-msg" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="step-grid">
+        <div class="prose">
+          <h2>Precompute, or scan every time?</h2>
+          <p>On-demand warehouses bill by bytes scanned. A dashboard that hits a big table 200 times a day pays for
+            the full scan 200 times.</p>
+          <p>A <strong>materialized view</strong> or pre-aggregated table pays once to compute a small result, then
+            every query reads that. The refresh costs something too: a <strong>full rebuild</strong> rescans the
+            whole table each time, an <strong>incremental</strong> refresh processes only new data.</p>
+          <p>Precomputing wins for popular, repetitive queries on big tables. For a rarely opened report, just scan.</p>
+          <div class="try"><b>Try it</b>Find the query volume where materializing starts to pay. Then switch to
+            full rebuilds every 15 minutes on a large table.</div>
+        </div>
+        <div class="stage">
+          <div class="panel">
+            <div class="ctls">
+              <label class="ctl"><span>Table size</span><output id="s7-size-out"></output><input id="s7-size" type="range" min="1" max="4" step="0.1" value="3"></label>
+              <label class="ctl"><span>Dashboard queries per day</span><output for="s7-qpd"></output><input id="s7-qpd" type="range" min="1" max="2000" step="1" value="200"></label>
+            </div>
+            <div class="controls" style="margin-top:.8rem">
+              <span class="lbl">Refresh</span>
+              <div class="seg" id="s7-mode" role="group" aria-label="Refresh type">
+                <button data-v="inc" aria-pressed="true">Incremental</button>
+                <button data-v="full" aria-pressed="false">Full rebuild</button>
+              </div>
+              <div class="seg" id="s7-refresh" role="group" aria-label="Refreshes per day">
+                <button data-v="1" aria-pressed="false">Daily</button>
+                <button data-v="24" aria-pressed="true">Hourly</button>
+                <button data-v="96" aria-pressed="false">Every 15 min</button>
+              </div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="stat-label">Scan every time</span><span class="stat-value" id="s7-od">–</span><span class="stat-note">per day, $5/TB scanned</span></div>
+            <div class="stat"><span class="stat-label">Materialized</span><span class="stat-value" id="s7-mv">–</span><span class="stat-note">per day, refresh + reads</span></div>
+            <div class="stat"><span class="stat-label">Materializing is</span><span class="stat-value" id="s7-ratio">–</span></div>
+          </div>
+          <div class="panel">
+            <p class="panel-title">Cost per day</p>
+            <div class="bars" id="s7-bars"></div>
+            <p class="callout">Illustrative prices. Assumes 2% new data per day and an aggregate 0.1% the size of the table.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Version and date are bumped by hand; see README.md. -->
+  <footer class="site">
+    Simulated data only. Runs entirely in your browser.
+    · <a href="https://jkastl.github.io/data-eng-concepts/">Fundamentals</a>
+    · <a href="https://github.com/jkastl/data-eng-advanced">Source</a> · v1.0.0 · 2026-09-26
+  </footer>
+
+  <script src="js/core.js"></script>
+  <script src="js/streaming.js"></script>
+  <script src="js/delivery.js"></script>
+  <script src="js/cdc.js"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/distributed.js"></script>
+  <script src="js/lineage.js"></script>
+  <script src="js/semantic.js"></script>
+  <script>DE.start();</script>
+</body>
+</html>
