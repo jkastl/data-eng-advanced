@@ -20,8 +20,8 @@ This picks up where [data-eng-concepts](https://github.com/jkastl/data-eng-conce
 | 7 | Semantic layers and cost | Reconcile three "revenue" numbers with one metric definition; weigh materialized views against scanning |
 
 All data is generated in the page from fixed seeds, so every visit sees the same thing. Nothing is
-fetched, and none of it is sent anywhere; the page only records an anonymous visit count
-([GoatCounter](https://www.goatcounter.com/), no cookies).
+fetched, and none of it is sent anywhere: there's no backend. The page loads an anonymous
+[GoatCounter](https://www.goatcounter.com/) visit counter (no cookies) and works without it.
 
 ## Running it
 
